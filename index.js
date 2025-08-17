@@ -16,30 +16,27 @@ app.post('/submit-form', async (req, res) => {
   const {
     name, phone, birthDate, gender,
     address, serveInChurch, maritalStatus,
-    community, jobType, educationLevel,
-    schoolName, studyType, studyYear,
-    hasDisability, disabilityType, otherDisability
+    community, jobType, 
+    educationLevel = null, 
+    schoolName = null, 
+    studyType = null, 
+    studyYear = null,
+    hasDisability, 
+    disabilityType = null, 
+    otherDisability = null
   } = req.body;
+
+  console.log('Received data:', req.body); // Add this for debugging
 
   // Basic validation
   if (!name || !phone || !birthDate || !gender ||
       !address || !serveInChurch || !maritalStatus || 
-      !community || !jobType || !hasDisability) {
+      !community || !jobType || hasDisability === undefined) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  // Additional validation for students
-  if (jobType === 'ተማሪ' && (!educationLevel || !schoolName)) {
-    return res.status(400).json({ error: 'Missing education information' });
-  }
-
-  // Additional validation for disabilities
-  if (hasDisability === 'አለ' && !disabilityType) {
-    return res.status(400).json({ error: 'Missing disability information' });
-  }
-
   try {
-    await pool.query(
+    const result = await pool.query(
       `INSERT INTO halaba_form (
         name, phone, birth_date, gender, address, 
         serve_in_church, marital_status, community, 
@@ -50,14 +47,22 @@ app.post('/submit-form', async (req, res) => {
       [
         name, phone, birthDate, gender,
         address, serveInChurch, maritalStatus,
-        community, jobType, educationLevel,
-        schoolName, studyType, studyYear,
-        hasDisability, disabilityType, otherDisability
+        community, jobType, 
+        educationLevel, 
+        schoolName,
+        studyType, 
+        studyYear,
+        hasDisability, 
+        disabilityType, 
+        otherDisability
       ]
     );
     res.json({ success: true });
   } catch (error) {
     console.error('Database error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: error.message 
+    });
   }
 });
