@@ -16,39 +16,48 @@ app.post('/submit-form', async (req, res) => {
   const {
     name, phone, birthDate, gender,
     address, serveInChurch, maritalStatus,
-    community, jobType
+    community, jobType, educationLevel,
+    schoolName, studyType, studyYear,
+    hasDisability, disabilityType, otherDisability
   } = req.body;
 
-  
+  // Basic validation
   if (!name || !phone || !birthDate || !gender ||
-      !address || !serveInChurch || !maritalStatus || !community || !jobType) {
+      !address || !serveInChurch || !maritalStatus || 
+      !community || !jobType || !hasDisability) {
     return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  // Additional validation for students
+  if (jobType === 'ተማሪ' && (!educationLevel || !schoolName)) {
+    return res.status(400).json({ error: 'Missing education information' });
+  }
+
+  // Additional validation for disabilities
+  if (hasDisability === 'አለ' && !disabilityType) {
+    return res.status(400).json({ error: 'Missing disability information' });
   }
 
   try {
     await pool.query(
-      `INSERT INTO halaba_form
-        (name, phone, birth_date, gender, address, serve_in_church, marital_status, community, job_type)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      `INSERT INTO halaba_form (
+        name, phone, birth_date, gender, address, 
+        serve_in_church, marital_status, community, 
+        job_type, education_level, school_name, 
+        study_type, study_year, has_disability, 
+        disability_type, other_disability
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
       [
         name, phone, birthDate, gender,
         address, serveInChurch, maritalStatus,
-        community, jobType
+        community, jobType, educationLevel,
+        schoolName, studyType, studyYear,
+        hasDisability, disabilityType, otherDisability
       ]
     );
     res.json({ success: true });
   } catch (error) {
-    console.error(error);
+    console.error('Database error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
-});
-
-// Health check
-app.get('/', (req, res) => {
-  res.json({ status: 'Backend running.' });
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
 });
