@@ -138,6 +138,139 @@ app.get('/family-members', async (req, res) => {
   }
 });
 
+// New: Endpoint to get KPI counts
+app.get('/api/kpis', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    // 1. Total Households
+    const householdsRes = await client.query('SELECT COUNT(*) FROM Households');
+    const totalHouseholds = parseInt(householdsRes.rows[0].count, 10);
+
+    // 2. Total Members
+    const membersRes = await client.query('SELECT COUNT(*) FROM FamilyMembers');
+    const totalMembers = parseInt(membersRes.rows[0].count, 10);
+
+    // 3. Active Tithers (Assuming a "tithe_status" column in Households table)
+    // NOTE: If your Households table does not have 'tithe_status', this query will fail.
+    // I am including it to match the logic from the frontend.
+    const tithersRes = await client.query("SELECT COUNT(*) FROM Households WHERE tithe_status = 'paid'");
+    const activeTithers = parseInt(tithersRes.rows[0].count, 10);
+
+    // 4. Engaged Servers (Assuming a "serving_status" column in FamilyMembers table)
+    // NOTE: If your FamilyMembers table does not have 'serving_status', this query will fail.
+    // I am including it to match the logic from the frontend, using the assumed value 'አገልግያ አለው'.
+    const serversRes = await client.query("SELECT COUNT(*) FROM FamilyMembers WHERE serveinchurch = TRUE");
+    const engagedServers = parseInt(serversRes.rows[0].count, 10);
+
+    res.json({
+      totalHouseholds,
+      totalMembers,
+      activeTithers,
+      engagedServers,
+    });
+  } catch (error) {
+    console.error('Error fetching KPI data:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
+// New: Endpoint for Financial/Tithe Analysis
+app.get('/api/tithe-data', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        // NOTE: This assumes a 'tithe_status' column exists in the Households table.
+        const query = `
+            SELECT tithe_status, COUNT(*) 
+            FROM Households 
+            GROUP BY tithe_status
+        `;
+        const result = await client.query(query);
+        client.release();
+
+        const data = result.rows.map(row => ({
+            name: row.tithe_status === 'paid' ? 'Paid' : (row.tithe_status === 'pending' ? 'Pending' : 'Other'),
+            count: parseInt(row.count, 10),
+        }));
+
+        // Ensure we explicitly have Paid and Pending even if counts are 0, to match original logic structure
+        const paid = data.find(d => d.name === 'Paid') || { name: 'Paid', count: 0 };
+        const pending = data.find(d => d.name === 'Pending') || { name: 'Pending', count: 0 };
+
+        res.json([paid, pending]);
+    } catch (error) {
+        console.error('Error fetching tithe data:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    } finally {
+        client.release();
+    }
+});
+
+// New: Endpoint for Gender, Age, and Location Data
+app.get('/api/dashboard-charts-data', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        // 1. All Family Members (Gender & Age)
+        const membersQuery = 'SELECT gender, EXTRACT(YEAR FROM AGE(birthdate)) AS age, household_id FROM FamilyMembers';
+        const membersRes = await client.query(membersQuery);
+        const members = membersRes.rows;
+
+        // 2. All Households (Community)
+        const householdsQuery = 'SELECT household_id, community FROM Households';
+        const householdsRes = await client.query(householdsQuery);
+        const households = householdsRes.rows;
+        const householdMap = new Map(households.map(h => [h.household_id, h.community]));
+
+        // --- Process Gender Data ---
+        const maleCount = members.filter(m => m.gender === 'ወንድ').length;
+        const femaleCount = members.filter(m => m.gender === 'ሴት').length;
+        const genderData = [
+            { name: 'ወንድ', value: maleCount },
+            { name: 'ሴት', value: femaleCount },
+        ];
+
+        // --- Process Age Data ---
+        // NOTE: Age grouping logic is simplified here to what was implied in the frontend.
+        // In a real-world app, you'd calculate this based on birthDate.
+        const calculateAgeGroup = (age) => {
+          if (age < 13) return 'children';
+          if (age <= 25) return 'youth';
+          if (age <= 60) return 'adults';
+          return 'seniors';
+        };
+
+        const ageStatsMap = new Map([
+            ['Children', 0], ['Youth', 0], ['Adults', 0], ['Seniors', 0]
+        ]);
+        members.forEach(member => {
+            const ageGroup = calculateAgeGroup(member.age);
+            const name = ageGroup.charAt(0).toUpperCase() + ageGroup.slice(1);
+            ageStatsMap.set(name, ageStatsMap.get(name) + 1);
+        });
+        const ageData = Array.from(ageStatsMap.entries()).map(([name, count]) => ({ name, count }));
+
+        // --- Process Location Data ---
+        const communityMap = new Map();
+        households.forEach(h => {
+            const community = h.community || 'Unspecified';
+            const count = communityMap.get(community) || 0;
+            communityMap.set(community, count + 1);
+        });
+        const locationData = Array.from(communityMap.entries()).map(([community, count]) => ({ community, count }));
+
+        res.json({
+            genderData,
+            ageData,
+            locationData,
+        });
+    } catch (error) {
+        console.error('Error fetching chart data:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    } finally {
+        client.release();
+    }
+});
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
