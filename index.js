@@ -105,6 +105,38 @@ app.post('/submit-form', async (req, res) => {
     client.release();
   }
 });
+// Get all households
+app.get('/households', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT * FROM Households');
+    client.release();
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching households:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get all family members with household info
+app.get('/family-members', async (req, res) => {
+  try {
+    const client = await pool.connect();
+    const query = `
+      SELECT fm.*, h.latitude, h.longitude
+      FROM FamilyMembers fm
+      JOIN Households h ON fm.household_id = h.household_id
+    `;
+    const result = await client.query(query);
+    client.release();
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching family members:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
