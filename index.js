@@ -2,7 +2,9 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { Pool } = require('pg');
-
+require('dotenv').config(); 
+const twilio = require('twilio');
+const client = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
@@ -271,6 +273,28 @@ app.get('/api/dashboard-charts-data', async (req, res) => {
         client.release();
     }
 });
+app.post('/api/send-sms', async (req, res) => {
+  const { to, message } = req.body;
+
+  if (!to || !message) {
+    return res.status(400).json({ error: 'Missing "to" phone number or "message"' });
+  }
+
+  try {
+    const sentMessage = await client.messages.create({
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: to,
+      body: message
+    });
+    console.log(`SMS sent, SID: ${sentMessage.sid}`);
+    res.json({ success: true, sid: sentMessage.sid });
+  } catch (error) {
+    console.error('Error sending SMS:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
