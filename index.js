@@ -281,8 +281,8 @@ app.post('/api/send-sms', async (req, res) => {
 
   try {
     const sentMessage = await client.messages.create({
-      messagingServiceSid: 'MGbcb717553207c30b7c739474b77ace0f',   // Your Messaging Service SID
-      to:to,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: to,
       body: message
     });
     console.log(`SMS sent, SID: ${sentMessage.sid}`);
@@ -292,7 +292,6 @@ app.post('/api/send-sms', async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
-
 
 
 const PORT = process.env.PORT || 5000;
